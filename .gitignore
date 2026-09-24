@@ -1,0 +1,12 @@
+weatherwatch.db
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv
+venv/
+load_test_results.json
+accuracy_results.json
+node_modules/
+dist/
+.DS_Store

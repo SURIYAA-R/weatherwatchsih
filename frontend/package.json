@@ -1,0 +1,9 @@
+{
+  "name": "weatherwatch-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "serve": "python -m http.server 5173"
+  },
+  "description": "WeatherWatch frontend — serves static HTML/JS via Python http.server"
+}

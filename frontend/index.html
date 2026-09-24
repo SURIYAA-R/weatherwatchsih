@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeatherWatch — National Weather Analytics Platform</title>
+  <meta name="description" content="India's first citizen crowdsourcing platform with automated IMD/satellite credibility verification for weather events." />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- React + ReactDOM via CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel for JSX in browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Design Tokens ─────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --bg-2:      #161b22;
+      --bg-3:      #21262d;
+      --border:    #30363d;
+      --border-2:  #444c56;
+      --text:      #e6edf3;
+      --text-2:    #8b949e;
+      --text-3:    #6e7681;
+      --accent:    #1f6feb;
+      --accent-2:  #388bfd;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --orange:    #e3662a;
+      --red:       #f85149;
+      --purple:    #8957e5;
+      --teal:      #39c5cf;
+      --score-hi:  #3fb950;
+      --score-mid: #d29922;
+      --score-lo:  #f85149;
+      --font:      'Inter', system-ui, sans-serif;
+      --mono:      'JetBrains Mono', monospace;
+      --radius:    6px;
+      --radius-lg: 10px;
+      --shadow:    0 1px 3px rgba(0,0,0,0.4);
+      --shadow-lg: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .app { display: flex; flex-direction: column; height: 100vh; }
+
+    /* Top bar */
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 16px; height: 48px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; z-index: 1000;
+    }
+    .topbar-logo {
+      display: flex; align-items: center; gap: 8px; font-weight: 700;
+      font-size: 15px; color: var(--text); letter-spacing: -0.3px;
+    }
+    .topbar-logo .dot { color: var(--accent-2); }
+    .topbar-tabs { display: flex; gap: 4px; }
+    .tab {
+      padding: 5px 12px; border-radius: var(--radius);
+      border: none; background: transparent; color: var(--text-2);
+      cursor: pointer; font-family: var(--font); font-size: 12px; font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab:hover { background: var(--bg-3); color: var(--text); }
+    .tab.active { background: var(--accent); color: #fff; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .disclaimer-badge {
+      font-size: 10px; color: var(--yellow); background: rgba(210,153,34,0.12);
+      border: 1px solid rgba(210,153,34,0.3); border-radius: 20px;
+      padding: 3px 10px; font-weight: 500;
+    }
+    .live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--green); font-weight: 600;
+    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+    /* Body layout */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px; flex-shrink: 0;
+      background: var(--bg-2); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sidebar-section {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+    }
+    .sidebar-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text-3); font-weight: 600; margin-bottom: 8px;
+    }
+
+    /* Stats row */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .stat-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 8px 10px;
+    }
+    .stat-val { font-size: 20px; font-weight: 700; color: var(--text); }
+    .stat-lbl { font-size: 10px; color: var(--text-3); margin-top: 1px; }
+    .stat-card.green .stat-val { color: var(--green); }
+    .stat-card.red .stat-val { color: var(--red); }
+    .stat-card.yellow .stat-val { color: var(--yellow); }
+    .stat-card.blue .stat-val { color: var(--accent-2); }
+
+    /* Filters */
+    .filter-group { margin-bottom: 8px; }
+    .filter-label { font-size: 10px; color: var(--text-3); margin-bottom: 3px; font-weight: 500; }
+    .filter-select, .filter-input {
+      width: 100%; padding: 5px 8px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text); border-radius: var(--radius); font-family: var(--font);
+      font-size: 12px; outline: none; transition: border-color 0.15s;
+    }
+    .filter-select:focus, .filter-input:focus { border-color: var(--accent); }
+    .filter-row { display: flex; gap: 6px; }
+    .filter-row .filter-select { flex: 1; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 6px 14px;
+      border: none; border-radius: var(--radius); cursor: pointer;
+      font-family: var(--font); font-size: 12px; font-weight: 500;
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-ghost   { background: var(--bg-3); border: 1px solid var(--border); color: var(--text); }
+    .btn-warning { background: var(--orange); color: #fff; }
+    .btn-full { width: 100%; }
+
+    /* Event list */
+    .event-list { flex: 1; overflow-y: auto; }
+    .event-list::-webkit-scrollbar { width: 4px; }
+    .event-list::-webkit-scrollbar-track { background: var(--bg-2); }
+    .event-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .event-item {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.1s;
+    }
+    .event-item:hover { background: var(--bg-3); }
+    .event-item.selected { background: rgba(31,111,235,0.12); border-left: 3px solid var(--accent); }
+    .event-item-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .event-cat { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .event-score { font-size: 11px; font-weight: 700; font-family: var(--mono); }
+    .event-title { font-size: 12px; color: var(--text-2); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .event-meta { display: flex; gap: 8px; margin-top: 4px; font-size: 10px; color: var(--text-3); }
+
+    /* Category colours */
+    .cat-flood         { color: #58a6ff; }
+    .cat-cyclone       { color: #8957e5; }
+    .cat-heatwave      { color: #f85149; }
+    .cat-rain          { color: #39c5cf; }
+    .cat-fog           { color: #8b949e; }
+    .cat-hailstorm     { color: #d29922; }
+    .cat-drought       { color: #e3662a; }
+    .cat-thunderstorm  { color: #bc8cff; }
+    .cat-unknown       { color: #6e7681; }
+
+    /* Score colour */
+    .score-hi  { color: var(--score-hi); }
+    .score-mid { color: var(--score-mid); }
+    .score-lo  { color: var(--score-lo); }
+
+    /* Status badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 7px; border-radius: 20px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    .badge-published { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+    .badge-flagged   { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+    .badge-pending   { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+    .badge-rejected  { background: rgba(110,118,129,0.15); color: var(--text-3); border: 1px solid var(--border); }
+    .badge-merged    { background: rgba(137,87,229,0.15); color: var(--purple); border: 1px solid rgba(137,87,229,0.3); }
+
+    /* Main content */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    #map { flex: 1; min-height: 0; }
+
+    /* Panel (slides in from right) */
+    .panel-overlay {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+      display: flex; justify-content: flex-end;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    .panel {
+      width: 520px; background: var(--bg-2); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+      animation: slideIn 0.25s ease;
+    }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .panel-title { font-weight: 600; font-size: 14px; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+    .panel-body::-webkit-scrollbar { width: 4px; }
+    .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Score breakdown card */
+    .score-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px; margin-bottom: 12px;
+    }
+    .score-total {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .score-number { font-size: 40px; font-weight: 800; font-family: var(--mono); line-height: 1; }
+    .score-bar-wrap {
+      flex: 1; background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden;
+    }
+    .score-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .step-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .step-label { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: var(--accent); color: #fff; flex-shrink: 0; }
+    .step-name { font-size: 11px; font-weight: 600; color: var(--text); flex: 1; }
+    .step-pts { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+    .step-bar-wrap { width: 80px; background: var(--bg); border-radius: 3px; height: 5px; }
+    .step-bar { height: 100%; border-radius: 3px; background: var(--accent-2); }
+    .step-detail { font-size: 10px; color: var(--text-3); margin-left: 34px; margin-top: -4px; margin-bottom: 6px; }
+    .flags-box {
+      background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.25);
+      border-radius: var(--radius); padding: 10px; margin-top: 8px;
+    }
+    .flag-item { font-size: 11px; color: var(--red); padding: 2px 0; }
+
+    /* Section header */
+    .section-hdr { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3); font-weight: 600; margin: 14px 0 6px; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .detail-item { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+    .detail-lbl { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
+    .detail-val { font-size: 12px; font-weight: 500; color: var(--text); font-family: var(--mono); }
+    .geo-box {
+      background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 10px; font-size: 11px; color: var(--text-2); line-height: 1.6;
+    }
+    .review-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+    /* Form */
+    .form-page {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      animation: fadeIn 0.2s;
+    }
+    .form-card {
+      background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      width: 560px; max-height: 90vh; display: flex; flex-direction: column;
+      animation: slideUp 0.25s ease;
+      box-shadow: var(--shadow-lg);
+    }
+    @keyframes slideUp { from{transform:translateY(24px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .form-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .form-body { flex: 1; overflow-y: auto; padding: 16px; }
+    .form-body::-webkit-scrollbar { width: 4px; }
+    .form-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .form-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; }
+    .form-group { margin-bottom: 12px; }
+    .form-label { font-size: 11px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; display: block; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; padding: 7px 10px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text); border-radius: var(--radius); font-family: var(--font);
+      font-size: 12px; outline: none; transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-textarea { min-height: 80px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-check { display: flex; align-items: flex-start; gap: 8px; }
+    .form-check input { width: 14px; height: 14px; margin-top: 1px; flex-shrink: 0; accent-color: var(--accent); }
+    .form-check label { font-size: 11px; color: var(--text-2); line-height: 1.4; }
+    .consent-box {
+      background: rgba(31,111,235,0.08); border: 1px solid rgba(31,111,235,0.25);
+      border-radius: var(--radius); padding: 10px; margin-bottom: 12px;
+    }
+    .consent-title { font-size: 11px; font-weight: 600; color: var(--accent-2); margin-bottom: 4px; }
+    .consent-text { font-size: 10px; color: var(--text-3); line-height: 1.5; }
+    .disclaimer-bar {
+      background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.25);
+      border-radius: var(--radius); padding: 8px 12px;
+      font-size: 10px; color: var(--yellow); margin-bottom: 12px; text-align: center;
+    }
+    .required { color: var(--red); margin-left: 2px; }
+
+    /* Admin page */
+    .admin-page {
+      position: fixed; inset: 0; z-index: 1500;
+      background: var(--bg); display: flex; flex-direction: column; overflow: hidden;
+    }
+    .admin-topbar {
+      display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 48px;
+      background: var(--bg-2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .admin-body { display: flex; flex: 1; overflow: hidden; }
+    .admin-list {
+      width: 380px; flex-shrink: 0; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .admin-list-header {
+      padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2);
+    }
+    .admin-list-items { flex: 1; overflow-y: auto; }
+    .admin-item {
+      padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background 0.1s;
+    }
+    .admin-item:hover { background: var(--bg-3); }
+    .admin-item.selected { background: rgba(31,111,235,0.1); border-left: 3px solid var(--accent); }
+    .admin-detail { flex: 1; overflow-y: auto; padding: 20px; }
+    .admin-note-input {
+      width: 100%; padding: 8px 10px; margin: 8px 0;
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text); border-radius: var(--radius);
+      font-family: var(--font); font-size: 12px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .admin-note-input:focus { border-color: var(--accent); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+      animation: toastIn 0.2s ease; box-shadow: var(--shadow-lg);
+    }
+    @keyframes toastIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .toast-success { background: rgba(63,185,80,0.95); color: #fff; }
+    .toast-error   { background: rgba(248,81,73,0.95); color: #fff; }
+    .toast-info    { background: rgba(31,111,235,0.95); color: #fff; }
+
+    /* Loader */
+    .spinner {
+      width: 20px; height: 20px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 40px 20px; gap: 8px; color: var(--text-3); text-align: center;
+    }
+    .empty-state .icon { font-size: 32px; opacity: 0.4; }
+    .empty-state .title { font-size: 13px; font-weight: 500; color: var(--text-2); }
+    .empty-state .sub { font-size: 11px; }
+
+    /* Leaflet overrides */
+    .leaflet-container { background: #1a1f2e !important; }
+    .leaflet-popup-content-wrapper {
+      background: var(--bg-2) !important; color: var(--text) !important;
+      border: 1px solid var(--border) !important; border-radius: var(--radius-lg) !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+    .leaflet-popup-tip { background: var(--bg-2) !important; }
+    .leaflet-control-zoom { border-color: var(--border) !important; }
+    .leaflet-control-zoom a {
+      background: var(--bg-2) !important; color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-control-attribution { background: rgba(13,17,23,0.8) !important; color: var(--text-3) !important; }
+    .custom-marker div {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; border: 2px solid rgba(255,255,255,0.2);
+      cursor: pointer; transition: transform 0.15s;
+    }
+    .custom-marker div:hover { transform: scale(1.2); }
+
+    .hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+    .close-btn {
+      background: none; border: none; color: var(--text-3); cursor: pointer;
+      font-size: 18px; padding: 4px; border-radius: var(--radius); transition: color 0.15s, background 0.15s;
+    }
+    .close-btn:hover { color: var(--text); background: var(--bg-3); }
+
+    /* Progress bar for loading */
+    .loading-bar {
+      height: 2px; background: var(--accent);
+      animation: loadBar 1.2s ease-in-out infinite;
+      border-radius: 1px;
+    }
+    @keyframes loadBar {
+      0% { width: 0; margin-left: 0; }
+      50% { width: 60%; margin-left: 20%; }
+      100% { width: 0; margin-left: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Config ──────────────────────────────────────────────────────
+const API = 'http://localhost:8000';
+
+// ── Utilities ───────────────────────────────────────────────────
+const scoreColor = s => s >= 70 ? 'score-hi' : s >= 40 ? 'score-mid' : 'score-lo';
+const scoreBg    = s => s >= 70 ? '#3fb950' : s >= 40 ? '#d29922' : '#f85149';
+const catClass   = c => `cat-${c || 'unknown'}`;
+const catEmoji   = c => ({
+  flood:'🌊', cyclone:'🌀', heatwave:'🔥', rain:'🌧️', fog:'🌫️',
+  hailstorm:'🌨️', drought:'☀️', thunderstorm:'⚡', unknown:'❓'
+})[c] || '❓';
+const fmtScore   = s => s != null ? Math.round(s) : '--';
+const fmtDate    = d => d ? new Date(d).toLocaleString('en-IN', {dateStyle:'short',timeStyle:'short'}) : '--';
+const fmtDist    = d => d != null ? `${d.toFixed(1)} km` : '--';
+
+const CATEGORIES = ['flood','cyclone','heatwave','rain','fog','hailstorm','drought','thunderstorm'];
+const SEVERITIES = ['low','moderate','high','extreme'];
+const STATUSES   = ['published','flagged','pending','rejected','merged'];
+
+// ── API helpers ─────────────────────────────────────────────────
+async function apiFetch(path, opts={}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'API error');
+  }
+  return res.json();
+}
+
+// ── Toast ────────────────────────────────────────────────────────
+function Toast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className={`toast toast-${toast.type}`}>
+      <span>{toast.type==='success'?'✓':toast.type==='error'?'✕':'ℹ'}</span>
+      {toast.msg}
+    </div>
+  );
+}
+
+// ── Score Breakdown Component ────────────────────────────────────
+function ScoreBreakdown({ breakdown }) {
+  if (!breakdown) return <p style={{color:'var(--text-3)',fontSize:11}}>No score data.</p>;
+  const s = breakdown.total_score ?? 0;
+  const s1 = breakdown.step1_source_credibility;
+  const s2 = breakdown.step2_content_consistency;
+  const s3 = breakdown.step3_geo_temporal;
+
+  return (
+    <div className="score-card">
+      <div className="score-total">
+        <div className={`score-number ${scoreColor(s)}`}>{Math.round(s)}</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,color:'var(--text-3)',marginBottom:6}}>CREDIBILITY SCORE / 100</div>
+          <div className="score-bar-wrap">
+            <div className="score-bar" style={{width:`${s}%`,background:scoreBg(s)}} />
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--text-3)',marginTop:4}}>
+            <span>0</span>
+            <span style={{color:'var(--red)'}}>Flag &lt;40</span>
+            <span style={{color:'var(--green)'}}>Publish &gt;70</span>
+            <span>100</span>
+          </div>
+        </div>
+      </div>
+
+      {[
+        {label:'1', data:s1, max:40, color:'#1f6feb'},
+        {label:'2', data:s2, max:30, color:'#8957e5'},
+        {label:'3', data:s3, max:30, color:'#39c5cf'},
+      ].map(({label, data, max, color}) => data ? (
+        <div key={label}>
+          <div className="step-row">
+            <div className="step-label" style={{background:color}}>{label}</div>
+            <div className="step-name">{data.name}</div>
+            <div className="step-bar-wrap">
+              <div className="step-bar" style={{width:`${(data.total/max)*100}%`,background:color}} />
+            </div>
+            <div className="step-pts" style={{color}}>{data.total?.toFixed(1)}/{max}</div>
+          </div>
+          <div className="step-detail">{data.detail}</div>
+        </div>
+      ) : null)}
+
+      {breakdown.flags && breakdown.flags.length > 0 && (
+        <div className="flags-box">
+          <div style={{fontSize:10,fontWeight:600,color:'var(--red)',marginBottom:4}}>⚠ SCORE FLAGS</div>
+          {breakdown.flags.map((f,i) => <div key={i} className="flag-item">• {f}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Report Detail Panel ──────────────────────────────────────────
+function ReportPanel({ report, onClose, onAction, isAdmin=false }) {
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const doAction = async (action) => {
+    setSubmitting(true);
+    try {
+      await onAction(report.id, action, note);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!report) return null;
+  return (
+    <div className="panel-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+      <div className="panel">
+        <div className="panel-header">
+          <div className="panel-title">
+            {catEmoji(report.event_category)} Report #{report.id} — {report.event_category?.toUpperCase()}
+          </div>
+          <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="panel-body">
+          <div className="disclaimer-bar">
+            ⚠ Crowdsourced supplementary data — not an official IMD alert. Verify with official sources before acting.
+          </div>
+
+          {/* Status + badges */}
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
+            <span className={`badge badge-${report.status}`}>{report.status}</span>
+            {report.is_duplicate && <span className="badge badge-flagged">DUPLICATE</span>}
+            {report.source_type && <span className="badge" style={{background:'var(--bg-3)',color:'var(--text-2)',border:'1px solid var(--border)'}}>{report.source_type}</span>}
+          </div>
+
+          {/* Description */}
+          <div className="section-hdr">Description</div>
+          <div style={{background:'var(--bg-3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'10px',fontSize:12,color:'var(--text)',lineHeight:1.6,marginBottom:12}}>
+            {report.description}
+          </div>
+
+          {/* Score Breakdown — Section 3 */}
+          <div className="section-hdr">§3 Credibility Score Breakdown</div>
+          <ScoreBreakdown breakdown={report.score_breakdown} />
+
+          {/* Classification */}
+          <div className="section-hdr">Event Classification</div>
+          <div className="detail-grid" style={{marginBottom:12}}>
+            <div className="detail-item">
+              <div className="detail-lbl">Submitted Category</div>
+              <div className={`detail-val ${catClass(report.event_category)}`}>{catEmoji(report.event_category)} {report.event_category}</div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">NLP Classified As</div>
+              <div className={`detail-val ${catClass(report.classified_category)}`}>
+                {catEmoji(report.classified_category)} {report.classified_category || '--'}
+              </div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">Confidence</div>
+              <div className="detail-val">{report.classification_confidence != null ? `${(report.classification_confidence*100).toFixed(0)}%` : '--'}</div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">Severity</div>
+              <div className="detail-val">{report.severity}</div>
+            </div>
+          </div>
+
+          {/* Geo verification */}
+          <div className="section-hdr">Geo-Verification (IMD Cross-Reference)</div>
+          <div className="geo-box" style={{marginBottom:12}}>
+            <div style={{marginBottom:6,display:'flex',gap:12,flexWrap:'wrap'}}>
+              <span>📍 Claimed: <strong style={{fontFamily:'var(--mono)'}}>{report.latitude?.toFixed(4)}, {report.longitude?.toFixed(4)}</strong></span>
+              <span>🏢 Nearest IMD: <strong>{report.nearest_imd_station || 'N/A'}</strong></span>
+              <span>📏 Distance: <strong>{fmtDist(report.imd_distance_km)}</strong></span>
+              <span style={{color: report.imd_match ? 'var(--green)' : 'var(--red)'}}>
+                {report.imd_match ? '✓ Event on record at station' : '✗ Event NOT on record at station'}
+              </span>
+            </div>
+            <div style={{fontSize:10,color:'var(--text-3)'}}>{report.geo_score_detail}</div>
+          </div>
+
+          {/* Metadata */}
+          <div className="section-hdr">Metadata</div>
+          <div className="detail-grid" style={{marginBottom:12}}>
+            <div className="detail-item">
+              <div className="detail-lbl">Submitter</div>
+              <div className="detail-val">{report.submitter_name}</div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">Location</div>
+              <div className="detail-val">{[report.city, report.state].filter(Boolean).join(', ') || 'GPS only'}</div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">Event Time</div>
+              <div className="detail-val">{fmtDate(report.event_time)}</div>
+            </div>
+            <div className="detail-item">
+              <div className="detail-lbl">Submitted</div>
+              <div className="detail-val">{fmtDate(report.created_at)}</div>
+            </div>
+            {report.duplicate_of_id && (
+              <div className="detail-item" style={{gridColumn:'1/-1'}}>
+                <div className="detail-lbl">Duplicate of Report</div>
+                <div className="detail-val">#{report.duplicate_of_id}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Admin note if present */}
+          {report.admin_note && (
+            <>
+              <div className="section-hdr">Admin Note</div>
+              <div className="geo-box" style={{marginBottom:12}}>{report.admin_note}</div>
+            </>
+          )}
+
+          {/* Appeal path (Section 7) */}
+          {report.status === 'flagged' && (
+            <div style={{background:'rgba(248,81,73,0.08)',border:'1px solid rgba(248,81,73,0.2)',borderRadius:'var(--radius)',padding:10,fontSize:11,color:'var(--text-2)',lineHeight:1.6}}>
+              <strong style={{color:'var(--red)'}}>⚠ This report was auto-flagged.</strong><br/>
+              See the score breakdown above for the exact reasons. The submitter may resubmit with corrections.
+              An admin will review before any changes reflect on the public dashboard.
+            </div>
+          )}
+        </div>
+
+        {/* Admin actions */}
+        {isAdmin && report.status === 'flagged' && (
+          <div className="review-actions">
+            <input
+              className="filter-input" style={{flex:1}}
+              placeholder="Admin note (optional)…"
+              value={note} onChange={e=>setNote(e.target.value)}
+            />
+            <button className="btn btn-success" disabled={submitting} onClick={()=>doAction('approve')}>
+              {submitting ? <span className="spinner" style={{width:14,height:14}}/> : '✓'} Approve
+            </button>
+            <button className="btn btn-danger" disabled={submitting} onClick={()=>doAction('reject')}>
+              ✕ Reject
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Citizen Report Submission Form ──────────────────────────────
+function SubmitForm({ onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    submitter_name: '', submitter_email: '',
+    event_category: 'flood', description: '', severity: 'moderate',
+    latitude: '', longitude: '', city: '', state: '',
+    account_age_months: 0, is_verified_account: false, prior_verified_count: 0,
+    event_time: '', consent_given: false,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const getGPS = () => {
+    if (!navigator.geolocation) { setErr('Geolocation not supported.'); return; }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => { set('latitude', pos.coords.latitude.toFixed(6)); set('longitude', pos.coords.longitude.toFixed(6)); setGpsLoading(false); },
+      () => { setErr('Could not get GPS.'); setGpsLoading(false); }
+    );
+  };
+
+  const submit = async (e) => {
+    e.preventDefault(); setErr('');
+    if (!form.consent_given) { setErr('You must give consent to submit.'); return; }
+    if (!form.latitude || !form.longitude) { setErr('GPS coordinates required.'); return; }
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...form,
+        latitude: parseFloat(form.latitude),
+        longitude: parseFloat(form.longitude),
+        account_age_months: parseInt(form.account_age_months)||0,
+        prior_verified_count: parseInt(form.prior_verified_count)||0,
+        event_time: form.event_time || null,
+      };
+      const r = await apiFetch('/reports/', { method:'POST', body: JSON.stringify(payload) });
+      onSuccess(r);
+    } catch(e) {
+      setErr(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="form-page" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="form-card">
+        <div className="form-header">
+          <div>
+            <div style={{fontWeight:700,fontSize:14}}>📋 Submit a Weather Report</div>
+            <div style={{fontSize:10,color:'var(--text-3)'}}>All fields marked <span className="required">*</span> are required</div>
+          </div>
+          <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+        <form className="form-body" onSubmit={submit}>
+          <div className="disclaimer-bar">
+            ⚠ Crowdsourced supplementary data — not an official IMD alert. Verify with official sources before acting.
+          </div>
+
+          {/* Submitter */}
+          <div className="section-hdr">Submitter Information</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Name <span className="required">*</span></label>
+              <input className="form-input" required value={form.submitter_name} onChange={e=>set('submitter_name',e.target.value)} placeholder="Your name" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Email</label>
+              <input className="form-input" type="email" value={form.submitter_email} onChange={e=>set('submitter_email',e.target.value)} placeholder="Optional" />
+            </div>
+          </div>
+
+          {/* Event */}
+          <div className="section-hdr">Event Details</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Category <span className="required">*</span></label>
+              <select className="form-select" value={form.event_category} onChange={e=>set('event_category',e.target.value)}>
+                {CATEGORIES.map(c=><option key={c} value={c}>{catEmoji(c)} {c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Severity <span className="required">*</span></label>
+              <select className="form-select" value={form.severity} onChange={e=>set('severity',e.target.value)}>
+                {SEVERITIES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description <span className="required">*</span></label>
+            <textarea className="form-textarea" required value={form.description}
+              onChange={e=>set('description',e.target.value)}
+              placeholder="Describe what you observed. Include specific details — this improves the NLP classification accuracy." />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Event Date/Time</label>
+            <input className="form-input" type="datetime-local" value={form.event_time} onChange={e=>set('event_time',e.target.value)} />
+          </div>
+
+          {/* Location */}
+          <div className="section-hdr">Location</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Latitude <span className="required">*</span></label>
+              <input className="form-input" required value={form.latitude} onChange={e=>set('latitude',e.target.value)} placeholder="e.g. 19.0760" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Longitude <span className="required">*</span></label>
+              <input className="form-input" required value={form.longitude} onChange={e=>set('longitude',e.target.value)} placeholder="e.g. 72.8777" />
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" style={{width:'100%',marginBottom:10}} onClick={getGPS}>
+            {gpsLoading ? <span className="spinner" style={{width:12,height:12}}/> : '📍'} Auto-detect GPS
+          </button>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">City</label>
+              <input className="form-input" value={form.city} onChange={e=>set('city',e.target.value)} placeholder="Mumbai" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">State</label>
+              <input className="form-input" value={form.state} onChange={e=>set('state',e.target.value)} placeholder="Maharashtra" />
+            </div>
+          </div>
+
+          {/* Source credibility hints */}
+          <div className="section-hdr">Source Credibility (affects Step 1 score)</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Account Age (months)</label>
+              <input className="form-input" type="number" min="0" value={form.account_age_months} onChange={e=>set('account_age_months',e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Prior Verified Reports</label>
+              <input className="form-input" type="number" min="0" value={form.prior_verified_count} onChange={e=>set('prior_verified_count',e.target.value)} />
+            </div>
+          </div>
+          <div className="form-check" style={{marginBottom:12}}>
+            <input type="checkbox" id="verified" checked={form.is_verified_account} onChange={e=>set('is_verified_account',e.target.checked)} />
+            <label htmlFor="verified">I am a verified/official account (+15 pts to credibility score)</label>
+          </div>
+
+          {/* Consent */}
+          <div className="consent-box">
+            <div className="consent-title">📋 Data Consent & Retention Policy</div>
+            <div className="consent-text">
+              Your GPS coordinates and any uploaded media will be stored for up to 90 days for weather analytics.
+              Data is anonymised before any public display. You may request deletion by contacting admin.
+              This platform is for supplementary crowdsourced data only — not an official IMD service.
+            </div>
+            <div className="form-check" style={{marginTop:8}}>
+              <input type="checkbox" id="consent" required checked={form.consent_given} onChange={e=>set('consent_given',e.target.checked)} />
+              <label htmlFor="consent" style={{color:'var(--text)'}}>
+                <strong>I give explicit consent</strong> for my GPS/media data to be stored and used for weather analytics. <span className="required">*</span>
+              </label>
+            </div>
+          </div>
+
+          {err && <div style={{color:'var(--red)',fontSize:11,marginTop:8}}>⚠ {err}</div>}
+        </form>
+        <div className="form-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn-primary" style={{flex:1}}
+            disabled={submitting}
+            onClick={submit}
+          >
+            {submitting ? <><span className="spinner" style={{width:14,height:14}}/> Scoring…</> : '⚡ Submit & Score Report'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Map Component ────────────────────────────────────────────────
+const CAT_COLORS = {
+  flood:'#58a6ff', cyclone:'#8957e5', heatwave:'#f85149', rain:'#39c5cf',
+  fog:'#8b949e', hailstorm:'#d29922', drought:'#e3662a', thunderstorm:'#bc8cff', unknown:'#6e7681'
+};
+
+function ReportMap({ reports, onSelect }) {
+  const mapRef = useRef(null);
+  const leafletRef = useRef(null);
+  const markersRef = useRef({});
+
+  useEffect(() => {
+    if (leafletRef.current) return;
+    leafletRef.current = L.map('map', {
+      center: [20.5937, 78.9629], zoom: 5,
+      zoomControl: true,
+    });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO',
+      maxZoom: 18,
+    }).addTo(leafletRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!leafletRef.current) return;
+    // Clear old markers
+    Object.values(markersRef.current).forEach(m => m.remove());
+    markersRef.current = {};
+
+    reports.forEach(r => {
+      if (!r.latitude || !r.longitude) return;
+      const color = CAT_COLORS[r.event_category] || '#6e7681';
+      const score = r.credibility_score ?? 0;
+      const icon = L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="background:${color}22;border-color:${color};box-shadow:0 0 8px ${color}66">
+                 ${catEmoji(r.event_category)}
+               </div>`,
+        iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -20],
+      });
+      const marker = L.marker([r.latitude, r.longitude], { icon }).addTo(leafletRef.current);
+      marker.bindPopup(`
+        <div style="min-width:180px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px">
+            ${catEmoji(r.event_category)} ${r.event_category?.toUpperCase()} #${r.id}
+          </div>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:8px">${r.description?.slice(0,100)}…</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10px">
+            <span style="color:${score>=70?'#3fb950':score>=40?'#d29922':'#f85149'}">
+              Score: <strong>${Math.round(score)}/100</strong>
+            </span>
+            <span style="color:#8b949e">${r.city||''}${r.state?', '+r.state:''}</span>
+          </div>
+        </div>
+      `);
+      marker.on('click', () => onSelect(r));
+      markersRef.current[r.id] = marker;
+    });
+  }, [reports, onSelect]);
+
+  return <div id="map" style={{width:'100%',height:'100%'}} />;
+}
+
+// ── Admin Page ───────────────────────────────────────────────────
+function AdminPage({ onClose, showToast }) {
+  const [queue, setQueue] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [adminName, setAdminName] = useState('Admin');
+
+  const loadQueue = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch('/reports/admin/queue');
+      setQueue(data);
+    } catch(e) { showToast('error', e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadQueue(); }, [loadQueue]);
+
+  const doAction = async (id, action, note) => {
+    try {
+      const updated = await apiFetch(`/reports/${id}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ action, admin_note: note, reviewed_by: adminName }),
+      });
+      showToast('success', `Report #${id} ${action}d successfully.`);
+      setQueue(q => q.filter(r => r.id !== id));
+      setSelected(null);
+    } catch(e) { showToast('error', e.message); }
+  };
+
+  return (
+    <div className="admin-page">
+      <div className="admin-topbar">
+        <div style={{fontWeight:700,fontSize:14}}>🛡 Admin Review Queue</div>
+        <div style={{fontSize:11,color:'var(--text-3)'}}>Flagged reports awaiting review</div>
+        <div style={{marginLeft:'auto',display:'flex',gap:10,alignItems:'center'}}>
+          <input
+            className="filter-input" style={{width:140}}
+            placeholder="Admin name…"
+            value={adminName} onChange={e=>setAdminName(e.target.value)}
+          />
+          <button className="btn btn-ghost" onClick={loadQueue}>↻ Refresh</button>
+          <button className="btn btn-ghost" onClick={onClose}>✕ Close</button>
+        </div>
+      </div>
+      <div className="admin-body">
+        <div className="admin-list">
+          <div className="admin-list-header">
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{fontSize:12,fontWeight:600}}>Flagged Reports</span>
+              <span className="badge badge-flagged">{queue.length}</span>
+            </div>
+            {loading && <div className="loading-bar" style={{marginTop:6}} />}
+          </div>
+          <div className="admin-list-items">
+            {queue.length === 0 && !loading && (
+              <div className="empty-state">
+                <div className="icon">✓</div>
+                <div className="title">Queue is clear</div>
+                <div className="sub">No flagged reports awaiting review</div>
+              </div>
+            )}
+            {queue.map(r => (
+              <div key={r.id} className={`admin-item ${selected?.id===r.id?'selected':''}`} onClick={()=>setSelected(r)}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                  <span className={`event-cat ${catClass(r.event_category)}`}>{catEmoji(r.event_category)} {r.event_category}</span>
+                  <span className={`event-score ${scoreColor(r.credibility_score??0)}`}>{fmtScore(r.credibility_score)}/100</span>
+                </div>
+                <div style={{fontSize:11,color:'var(--text)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.description}</div>
+                <div style={{display:'flex',gap:8,fontSize:10,color:'var(--text-3)'}}>
+                  <span>#{r.id}</span>
+                  <span>{r.submitter_name}</span>
+                  <span>{fmtDate(r.created_at)}</span>
+                  {r.is_duplicate && <span style={{color:'var(--red)'}}>DUP</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="admin-detail">
+          {!selected ? (
+            <div className="empty-state">
+              <div className="icon">←</div>
+              <div className="title">Select a report</div>
+              <div className="sub">Click a flagged report to review its full credibility breakdown</div>
+            </div>
+          ) : (
+            <>
+              <div style={{marginBottom:16}}>
+                <h2 style={{fontSize:16,fontWeight:700,marginBottom:4}}>
+                  {catEmoji(selected.event_category)} Report #{selected.id} — {selected.event_category?.toUpperCase()}
+                </h2>
+                <div style={{fontSize:11,color:'var(--text-3)'}}>Submitted by {selected.submitter_name} · {fmtDate(selected.created_at)}</div>
+              </div>
+
+              <div className="disclaimer-bar" style={{textAlign:'left',marginBottom:16}}>
+                ⚠ Crowdsourced supplementary data — not an official IMD alert. Verify with official sources before acting.
+              </div>
+
+              {/* Score breakdown */}
+              <div className="section-hdr">§3 Credibility Score Breakdown</div>
+              <ScoreBreakdown breakdown={selected.score_breakdown} />
+
+              {/* Geo verification */}
+              <div className="section-hdr">Geo-Verification</div>
+              <div className="geo-box" style={{marginBottom:16}}>
+                <div style={{marginBottom:6,display:'flex',gap:12,flexWrap:'wrap'}}>
+                  <span>📍 <strong style={{fontFamily:'var(--mono)'}}>{selected.latitude?.toFixed(4)}, {selected.longitude?.toFixed(4)}</strong></span>
+                  <span>🏢 <strong>{selected.nearest_imd_station || 'N/A'}</strong></span>
+                  <span>📏 {fmtDist(selected.imd_distance_km)}</span>
+                  <span style={{color:selected.imd_match?'var(--green)':'var(--red)'}}>
+                    {selected.imd_match ? '✓ Match' : '✗ Mismatch'}
+                  </span>
+                </div>
+                <div style={{fontSize:10,color:'var(--text-3)'}}>{selected.geo_score_detail}</div>
+              </div>
+
+              {/* Description */}
+              <div className="section-hdr">Full Description</div>
+              <div style={{background:'var(--bg-3)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'10px',fontSize:12,color:'var(--text)',lineHeight:1.6,marginBottom:16}}>
+                {selected.description}
+              </div>
+
+              {/* Dedup info */}
+              {selected.is_duplicate && (
+                <div style={{background:'rgba(248,81,73,0.1)',border:'1px solid rgba(248,81,73,0.3)',borderRadius:'var(--radius)',padding:10,fontSize:11,marginBottom:16}}>
+                  <strong style={{color:'var(--red)'}}>⚠ Possible Duplicate</strong> — Similar report #{selected.duplicate_of_id} was submitted within 1 hour from within 15 km.
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="section-hdr">Admin Action</div>
+              <input
+                className="admin-note-input"
+                placeholder="Admin note (shown to submitter as appeal reason)…"
+              />
+              <div style={{display:'flex',gap:8,marginTop:8}}>
+                <button className="btn btn-success" style={{flex:1}} onClick={()=>doAction(selected.id,'approve','')}>
+                  ✓ Approve — Publish to Dashboard
+                </button>
+                <button className="btn btn-danger" style={{flex:1}} onClick={()=>doAction(selected.id,'reject','')}>
+                  ✕ Reject Report
+                </button>
+              </div>
+              <div style={{fontSize:10,color:'var(--text-3)',marginTop:8,lineHeight:1.5}}>
+                ℹ Approval/rejection reflects instantly on the public dashboard. The submitter will see a score breakdown as the appeal reason.
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ─────────────────────────────────────────────────────
+function App() {
+  const [reports, setReports] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [filters, setFilters] = useState({
+    event_category: '', status: '', state: '', date_from: '', date_to: '',
+  });
+  const toastTimer = useRef(null);
+
+  const showToast = (type, msg) => {
+    setToast({ type, msg });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
+  };
+
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.event_category) params.set('event_category', filters.event_category);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.state) params.set('state', filters.state);
+      if (filters.date_from) params.set('date_from', filters.date_from);
+      if (filters.date_to) params.set('date_to', filters.date_to);
+      params.set('page_size', '200');
+      const data = await apiFetch('/reports/?' + params.toString());
+      setReports(data);
+    } catch(e) { showToast('error', e.message); }
+    finally { setLoading(false); }
+  }, [filters]);
+
+  const loadStats = useCallback(async () => {
+    try { setStats(await apiFetch('/reports/stats/summary')); }
+    catch(e) {}
+  }, []);
+
+  useEffect(() => { loadReports(); }, [loadReports]);
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  // Auto-refresh every 10s
+  useEffect(() => {
+    const t = setInterval(() => { loadReports(); loadStats(); }, 10000);
+    return () => clearInterval(t);
+  }, [loadReports, loadStats]);
+
+  const handleSubmitSuccess = (report) => {
+    setShowForm(false);
+    showToast('success', `Report #${report.id} submitted! Score: ${Math.round(report.credibility_score)}/100 — Status: ${report.status}`);
+    loadReports(); loadStats();
+  };
+
+  const handleAdminAction = async (id, action, note) => {
+    const updated = await apiFetch(`/reports/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, admin_note: note, reviewed_by: 'Admin' }),
+    });
+    showToast('success', `Report #${id} ${action}d.`);
+    setSelected(null); loadReports(); loadStats();
+    return updated;
+  };
+
+  const replayDemo = async () => {
+    try {
+      const res = await apiFetch('/social/replay-demo', { method: 'POST' });
+      showToast('success', `Ingested ${res.ingested} social posts from hashtag feed.`);
+      loadReports(); loadStats();
+    } catch(e) { showToast('error', e.message); }
+  };
+
+  const setFilter = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+
+  const filteredForList = reports;
+
+  return (
+    <div className="app">
+      {/* Top bar */}
+      <div className="topbar">
+        <div className="topbar-logo">
+          <span>🌦</span>
+          <span>Weather<span className="dot">Watch</span></span>
+          <span style={{fontSize:9,color:'var(--text-3)',fontWeight:400,marginLeft:4}}>v1.0 · India</span>
+        </div>
+        <div className="topbar-tabs">
+          <button className="tab active">Public Dashboard</button>
+          <button className="tab" onClick={()=>setShowAdmin(true)}>Admin Queue {stats?.flagged>0&&<span style={{marginLeft:4,background:'var(--red)',color:'#fff',borderRadius:10,padding:'0 5px',fontSize:9}}>{stats.flagged}</span>}</button>
+        </div>
+        <div className="topbar-right">
+          <div className="disclaimer-badge">⚠ Supplementary data — Not an IMD alert</div>
+          <div className="live-badge"><div className="live-dot"/>{loading?'Updating…':'Live'}</div>
+          <button className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}} onClick={replayDemo}>⟳ Replay Feed</button>
+          <button className="btn btn-primary" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setShowForm(true)}>+ Submit Report</button>
+        </div>
+      </div>
+
+      <div className="body">
+        {/* Sidebar */}
+        <div className="sidebar">
+          {/* Stats */}
+          <div className="sidebar-section">
+            <div className="sidebar-title">Platform Stats</div>
+            <div className="stats-grid">
+              <div className="stat-card blue"><div className="stat-val">{stats?.total ?? '--'}</div><div className="stat-lbl">Total Reports</div></div>
+              <div className="stat-card green"><div className="stat-val">{stats?.published ?? '--'}</div><div className="stat-lbl">Published</div></div>
+              <div className="stat-card red"><div className="stat-val">{stats?.flagged ?? '--'}</div><div className="stat-lbl">Flagged</div></div>
+              <div className="stat-card yellow"><div className="stat-val">{stats?.avg_credibility_score ?? '--'}</div><div className="stat-lbl">Avg Score</div></div>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="sidebar-section">
+            <div className="sidebar-title">Filters</div>
+            <div className="filter-group">
+              <div className="filter-label">Event Category</div>
+              <select className="filter-select" value={filters.event_category} onChange={e=>setFilter('event_category',e.target.value)}>
+                <option value="">All Categories</option>
+                {CATEGORIES.map(c=><option key={c} value={c}>{catEmoji(c)} {c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
+              </select>
+            </div>
+            <div className="filter-group">
+              <div className="filter-label">Status</div>
+              <select className="filter-select" value={filters.status} onChange={e=>setFilter('status',e.target.value)}>
+                <option value="">All Statuses</option>
+                {STATUSES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </div>
+            <div className="filter-group">
+              <div className="filter-label">State / Location</div>
+              <input className="filter-input" placeholder="e.g. Maharashtra" value={filters.state} onChange={e=>setFilter('state',e.target.value)} />
+            </div>
+            <div className="filter-group">
+              <div className="filter-label">Date From</div>
+              <input className="filter-input" type="datetime-local" value={filters.date_from} onChange={e=>setFilter('date_from',e.target.value)} />
+            </div>
+            <div className="filter-group">
+              <div className="filter-label">Date To</div>
+              <input className="filter-input" type="datetime-local" value={filters.date_to} onChange={e=>setFilter('date_to',e.target.value)} />
+            </div>
+            <button className="btn btn-ghost btn-full" style={{marginTop:4}} onClick={()=>setFilters({event_category:'',status:'',state:'',date_from:'',date_to:''})}>
+              ✕ Clear Filters
+            </button>
+          </div>
+
+          {/* Event list */}
+          <div className="sidebar-section" style={{padding:'8px 0 0',borderBottom:'none',flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'0 12px 8px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div className="sidebar-title" style={{marginBottom:0}}>Reports ({filteredForList.length})</div>
+              {loading && <div className="spinner" style={{width:12,height:12}}/>}
+            </div>
+            <div className="event-list">
+              {filteredForList.length === 0 && !loading && (
+                <div className="empty-state">
+                  <div className="icon">🗂</div>
+                  <div className="title">No reports found</div>
+                  <div className="sub">Try adjusting filters or submitting a report</div>
+                </div>
+              )}
+              {filteredForList.map(r=>(
+                <div key={r.id} className={`event-item ${selected?.id===r.id?'selected':''}`} onClick={()=>setSelected(r)}>
+                  <div className="event-item-header">
+                    <span className={`event-cat ${catClass(r.event_category)}`}>{catEmoji(r.event_category)} {r.event_category}</span>
+                    <span className={`event-score ${scoreColor(r.credibility_score??0)}`}>{fmtScore(r.credibility_score)}/100</span>
+                  </div>
+                  <div className="event-title">{r.description}</div>
+                  <div className="event-meta">
+                    <span>#{r.id}</span>
+                    <span className={`badge badge-${r.status}`} style={{fontSize:8,padding:'1px 5px'}}>{r.status}</span>
+                    {r.city && <span>{r.city}</span>}
+                    <span>{fmtDate(r.created_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Map */}
+        <div className="main">
+          <ReportMap
+            reports={reports.filter(r=>r.status==='published'||r.status==='flagged'||r.status==='pending')}
+            onSelect={setSelected}
+          />
+        </div>
+      </div>
+
+      {/* Panels / Modals */}
+      {selected && (
+        <ReportPanel
+          report={selected}
+          onClose={()=>setSelected(null)}
+          onAction={handleAdminAction}
+          isAdmin={false}
+        />
+      )}
+      {showForm && (
+        <SubmitForm
+          onClose={()=>setShowForm(false)}
+          onSuccess={handleSubmitSuccess}
+        />
+      )}
+      {showAdmin && (
+        <AdminPage
+          onClose={()=>{setShowAdmin(false);loadReports();loadStats();}}
+          showToast={showToast}
+        />
+      )}
+      <Toast toast={toast} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

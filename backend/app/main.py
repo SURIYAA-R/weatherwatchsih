@@ -1,7 +1,6 @@
-"""
-FastAPI application entry point.
-"""
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -37,9 +36,21 @@ app.add_middleware(
 app.include_router(reports_router)
 app.include_router(social_router)
 
+# Locations for the frontend UI file
+STATIC_INDEX = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "index.html")
+PARENT_INDEX = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "index.html"))
+
 
 @app.get("/", tags=["Health"])
-async def root():
+async def root(request: Request):
+    accept = request.headers.get("accept", "")
+    # When opened in a web browser, serve the interactive WeatherWatch dashboard!
+    if "text/html" in accept:
+        for path in [STATIC_INDEX, PARENT_INDEX]:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return HTMLResponse(content=f.read())
+
     return {
         "service": "WeatherWatch API",
         "version": "1.0.0",

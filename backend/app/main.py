@@ -1,6 +1,6 @@
-import os
+from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -36,30 +36,44 @@ app.add_middleware(
 app.include_router(reports_router)
 app.include_router(social_router)
 
-# Locations for the frontend UI file
-STATIC_INDEX = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "index.html")
-PARENT_INDEX = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "index.html"))
+# Locations for the frontend UI file (robust Path resolution)
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_INDEX = BASE_DIR / "static" / "index.html"
+PARENT_INDEX = BASE_DIR.parent / "frontend" / "index.html"
 
 
-@app.get("/", tags=["Health"])
-async def root(request: Request):
-    accept = request.headers.get("accept", "")
-    # When opened in a web browser, serve the interactive WeatherWatch dashboard!
-    if "text/html" in accept:
-        for path in [STATIC_INDEX, PARENT_INDEX]:
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as f:
-                    return HTMLResponse(content=f.read())
+def get_index_path() -> Path | None:
+    for p in [STATIC_INDEX, PARENT_INDEX]:
+        if p.is_file():
+            return p
+    return None
 
-    return {
+
+@app.get("/", tags=["UI & Health"], response_class=HTMLResponse)
+async def root(format: str | None = None):
+    # If explicitly requested format=json, return the service info JSON
+    if format == "json":
+        return JSONResponse(content={
+            "service": "WeatherWatch API",
+            "version": "1.0.0",
+            "status": "operational",
+            "disclaimer": (
+                "Crowdsourced supplementary data — not an official IMD alert. "
+                "Verify with official sources before acting."
+            ),
+        })
+
+    # By default, serve the complete interactive WeatherWatch map & web application!
+    index_file = get_index_path()
+    if index_file:
+        return FileResponse(index_file, media_type="text/html")
+
+    return JSONResponse(content={
         "service": "WeatherWatch API",
         "version": "1.0.0",
         "status": "operational",
-        "disclaimer": (
-            "Crowdsourced supplementary data — not an official IMD alert. "
-            "Verify with official sources before acting."
-        ),
-    }
+        "message": "Frontend index.html not found on server."
+    })
 
 
 @app.get("/health", tags=["Health"])
